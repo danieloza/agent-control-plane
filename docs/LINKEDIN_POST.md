@@ -4,7 +4,7 @@ Built a new portfolio project this week: **Agent Control Plane**.
 
 It is not another chatbot demo.
 
-It is an operator-facing platform for AI agents that shows:
+It is an operator-facing platform for AI systems that shows:
 
 - execution timelines
 - policy checks
@@ -12,9 +12,9 @@ It is an operator-facing platform for AI agents that shows:
 - incidents
 - replay compare
 - eval scorecards
-- ownership and review queue views
+- queue ownership and review workflows
 
-The goal was to build something closer to a real AI operations workstation than a prompt toy.
+The goal was to build something closer to a real AI operations workstation than a prompt wrapper.
 
 Stack:
 
@@ -31,4 +31,4 @@ What I wanted to show:
 
 Repo:
 
-`github.com/danieloza/agent-control-plane`
+https://github.com/danieloza/agent-control-plane
