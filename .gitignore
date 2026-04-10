@@ -1,0 +1,7 @@
+.pytest_cache/
+__pycache__/
+*.pyc
+.venv/
+src/*.egg-info/
+src/agent_control_plane.egg-info/
+docs/assets/

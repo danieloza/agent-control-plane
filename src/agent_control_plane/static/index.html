@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent Control Plane</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="backdrop"></div>
+  <main class="shell">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Agent Mission Control</p>
+        <h1>Run, govern, replay, and audit AI agents like a real product team.</h1>
+      </div>
+      <div class="hero-actions">
+        <select id="profile-select"></select>
+        <select id="scenario-select"></select>
+        <button id="launch-button" class="primary">Launch Scenario</button>
+      </div>
+    </section>
+
+    <section class="overview-grid" id="overview-grid"></section>
+
+    <section class="main-grid">
+      <aside class="panel stack">
+        <div class="panel-header">
+          <h2>Runs</h2>
+          <span class="mono" id="run-count">0</span>
+        </div>
+        <div id="run-list" class="run-list"></div>
+      </aside>
+
+      <section class="panel stack">
+        <div class="panel-header">
+          <h2>Execution Timeline</h2>
+          <span class="mono" id="active-run-label">No run selected</span>
+        </div>
+        <div id="timeline" class="timeline"></div>
+      </section>
+
+      <aside class="panel stack">
+        <div class="panel-header">
+          <h2>Command View</h2>
+          <span class="mono">Operator</span>
+        </div>
+        <div id="run-summary" class="summary-card"></div>
+        <div class="action-group">
+          <button data-action="approve">Approve</button>
+          <button data-action="reject">Reject</button>
+          <button data-action="escalate">Escalate</button>
+        </div>
+        <div class="action-group">
+          <button data-incident="contain">Contain</button>
+          <button data-incident="mitigate">Mitigate</button>
+          <button data-incident="reopen">Reopen</button>
+        </div>
+        <div class="action-group">
+          <button id="replay-button" class="secondary">Replay Under Stricter Controls</button>
+        </div>
+        <div id="compare-card" class="summary-card faint"></div>
+        <div id="incident-card" class="summary-card faint"></div>
+        <div class="summary-card faint">
+          <div class="label">Compare Against</div>
+          <select id="compare-run-select"></select>
+          <button id="compare-button">Load Compare</button>
+        </div>
+      </aside>
+    </section>
+
+    <section class="secondary-grid">
+      <section class="panel stack">
+        <div class="panel-header">
+          <h2>Review Queue</h2>
+        </div>
+        <div id="review-queue" class="queue-list"></div>
+      </section>
+      <section class="panel stack">
+        <div class="panel-header">
+          <h2>Activity Stream</h2>
+        </div>
+        <div id="activity-stream" class="activity-list"></div>
+      </section>
+      <section class="panel stack">
+        <div class="panel-header">
+          <h2>Eval Scorecards</h2>
+        </div>
+        <div id="eval-board" class="eval-board"></div>
+      </section>
+    </section>
+
+    <section class="secondary-grid">
+      <section class="panel stack">
+        <div class="panel-header">
+          <h2>Trace Graph</h2>
+        </div>
+        <div id="trace-graph" class="graph-list"></div>
+      </section>
+      <section class="panel stack">
+        <div class="panel-header">
+          <h2>Queue Ownership</h2>
+        </div>
+        <div id="queue-summary" class="queue-list"></div>
+      </section>
+      <section class="panel stack">
+        <div class="panel-header">
+          <h2>Comparison Matrix</h2>
+        </div>
+        <div id="comparison-matrix" class="matrix-list"></div>
+      </section>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
