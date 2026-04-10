@@ -72,7 +72,7 @@ button.secondary { background: linear-gradient(135deg, rgba(255, 189, 102, 0.18)
 .metric-card .label, .summary-card .label { color: var(--muted); font-size: 0.88rem; }
 .panel { padding: 20px; }
 .panel.stack { display: grid; gap: 16px; }
-.panel-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.panel-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-width: 0; }
 .panel-header h2 { margin: 0; font-size: 1rem; }
 .mono { font-family: "IBM Plex Mono", monospace; color: var(--muted); font-size: 0.86rem; }
 .run-list, .timeline, .queue-list, .activity-list, .eval-board, .graph-list, .matrix-list { display: grid; gap: 12px; }
@@ -92,7 +92,7 @@ button.secondary { background: linear-gradient(135deg, rgba(255, 189, 102, 0.18)
 }
 
 .run-item.active { border-color: rgba(111, 240, 178, 0.6); box-shadow: inset 0 0 0 1px rgba(111, 240, 178, 0.18); }
-.row { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.row { display: flex; justify-content: space-between; gap: 12px; align-items: center; min-width: 0; flex-wrap: wrap; }
 .badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 10px; font-size: 0.75rem; border: 1px solid transparent; }
 .badge.allowed { color: var(--green); border-color: rgba(111, 240, 178, 0.3); }
 .badge.approval_required { color: var(--amber); border-color: rgba(255, 189, 102, 0.3); }
@@ -112,6 +112,34 @@ button.secondary { background: linear-gradient(135deg, rgba(255, 189, 102, 0.18)
 .export-links a { color: var(--blue); text-decoration: none; font-size: 0.85rem; }
 .matrix-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
 .compare-panel { border-color: rgba(107, 183, 255, 0.3); }
+
+.summary-card,
+.timeline-item,
+.queue-item,
+.activity-item,
+.eval-item,
+.graph-node,
+.matrix-item {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.title,
+.small,
+.muted,
+.label,
+.mono {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+#compare-run-select,
+#profile-select,
+#scenario-select {
+  width: 100%;
+  min-width: 0;
+}
 
 @media (max-width: 1240px) {
   .overview-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }

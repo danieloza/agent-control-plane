@@ -4,4 +4,3 @@ __pycache__/
 .venv/
 src/*.egg-info/
 src/agent_control_plane.egg-info/
-docs/assets/
