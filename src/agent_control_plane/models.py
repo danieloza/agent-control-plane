@@ -13,6 +13,7 @@ SeverityType = Literal["low", "medium", "high", "critical"]
 ReplayMode = Literal["stricter_controls", "read_only", "staging_only"]
 ApprovalAction = Literal["approve", "reject", "escalate"]
 IncidentAction = Literal["contain", "mitigate", "reopen", "assign_owner"]
+ReplayJobStatus = Literal["queued", "processing", "completed", "failed"]
 
 
 class Step(BaseModel):
@@ -54,6 +55,38 @@ class Replay(BaseModel):
     run_id: str
     mode: ReplayMode
     summary: str
+
+
+class ReplayJob(BaseModel):
+    id: str
+    run_id: str
+    mode: ReplayMode
+    requested_by: str
+    status: ReplayJobStatus
+    created_at: str
+    updated_at: str
+    result_run_id: str | None = None
+    replay_id: str | None = None
+    error: str | None = None
+    attempts: int = 0
+    max_attempts: int = 3
+
+
+class OperatorNote(BaseModel):
+    id: str
+    run_id: str
+    author: str
+    body: str
+    created_at: str
+
+
+class AuditEvent(BaseModel):
+    id: str
+    run_id: str
+    actor: str
+    action: str
+    summary: str
+    created_at: str
 
 
 class Run(BaseModel):
@@ -137,3 +170,7 @@ class IncidentRequest(BaseModel):
 
 class ReplayRequest(BaseModel):
     mode: ReplayMode
+
+
+class OperatorNoteRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)

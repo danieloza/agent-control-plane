@@ -1,22 +1,28 @@
 # Architecture
 
-Agent Control Plane is split into four simple layers:
+Agent Control Plane is now split into production-oriented layers:
 
 - `repository.py`
-  stores seeded runtime data for runs, steps, incidents, replays, review queue, and evaluation scorecards
+  stores persistent runtime state through SQLAlchemy for scenarios, runs, steps, incidents, replays, activity, replay jobs, audit events, and operator notes
 - `services.py`
-  exposes operational logic, command-view metrics, replay creation, and action handling
+  exposes operational logic, command-view metrics, compare views, markdown exports, and replay job orchestration
 - `main.py`
-  exposes the FastAPI API and serves the cockpit UI
+  exposes the FastAPI API, request tracing, RBAC-guarded actions, health probes, and the cockpit UI
+- `auth.py`
+  resolves operator profiles, demo JWT auth, tenant scope, and permissions for approvals, incidents, and replay actions
+- `worker.py`
+  runs replay jobs outside the FastAPI process to keep execution separate from the HTTP lifecycle
+- `metrics.py`
+  exposes Prometheus-style counters and queue depth signals for ops visibility
 - `static/`
-  contains the browser cockpit
+  contains the browser cockpit and replay job polling flow
 
 ## Main Flow
 
 1. A run exists or is launched from a scenario.
 2. The operator inspects timeline, policy verdicts, boundaries, and eval signals.
 3. The operator can approve, reject, escalate, contain, or replay the run.
-4. Replay creates a safer sibling run with a stricter bundle.
+4. Replay is queued as a background job and completed into a safer sibling run with a stricter bundle.
 5. Compare view shows drift in risk, latency, cost, and control outcomes.
 
 ## Current product surfaces
@@ -28,21 +34,38 @@ Agent Control Plane is split into four simple layers:
 - ownership summary
 - comparison matrix
 - replay compare
+- replay job status
+- audit trail
+- operator notes
+- admin policy and tenant surfaces
 - markdown exports for run and incident review
+- health, readiness, and metrics probes
 
 ## Why the architecture is shaped this way
 
 The goal is to keep the system easy to evolve:
 
-- seeded runtime data lives in `repository.py`
+- persistence is isolated behind repository boundaries
 - operator logic stays in `services.py`
 - HTTP surface stays thin in `main.py`
+- auth and role checks stay separate from business logic
 - the cockpit only consumes the same API that external automation could consume later
+
+## Production slice already added
+
+- SQLAlchemy-backed persistence
+- role-aware auth through operator profiles
+- demo JWT auth and tenant-aware API access
+- background replay jobs
+- separate replay worker process
+- request IDs and structured request logs
+- Prometheus-style metrics surface
+- Alembic migration scaffolding
+- Docker/dev runbook assets
 
 ## Next meaningful upgrades
 
-- Postgres-backed state
-- role-aware auth
+- Postgres-first docker profile and migration tooling
 - external event ingestion
-- background replay jobs
-- OpenTelemetry traces
+- dedicated worker process for jobs
+- OpenTelemetry traces and richer metrics

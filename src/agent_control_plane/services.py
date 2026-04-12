@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from statistics import mean
 
-from .models import CompareView, Incident, Overview, Run, RunDetail, Scenario
-from .repository import InMemoryRepository
+from .auth import PROFILES, OperatorProfile
+from .catalog import POLICY_BUNDLES, TENANTS
+from .models import AuditEvent, CompareView, Incident, OperatorNote, Overview, ReplayJob, Run, RunDetail, Scenario
+from .repository import DatabaseRepository
 
 
 class ControlPlaneService:
-    def __init__(self, repository: InMemoryRepository) -> None:
+    def __init__(self, repository: DatabaseRepository) -> None:
         self.repository = repository
 
     def get_overview(self) -> Overview:
@@ -69,6 +71,21 @@ class ControlPlaneService:
     def list_activity(self) -> list[dict]:
         return [item.model_dump() for item in self.repository.list_activity()]
 
+    def list_jobs(self, status: str | None = None) -> list[ReplayJob]:
+        return self.repository.list_jobs(status)
+
+    def queue_depth(self) -> int:
+        return self.repository.queue_depth()
+
+    def list_operator_notes(self, run_id: str) -> list[OperatorNote]:
+        return self.repository.list_operator_notes(run_id)
+
+    def add_operator_note(self, run_id: str, author: str, body: str) -> OperatorNote:
+        return self.repository.add_operator_note(run_id, author, body)
+
+    def list_audit_events(self, run_id: str | None = None) -> list[AuditEvent]:
+        return self.repository.list_audit_events(run_id)
+
     def list_evals(self) -> list[dict]:
         return [
             {
@@ -128,38 +145,31 @@ class ControlPlaneService:
             )
         return matrix
 
-    def get_operator_context(self) -> dict:
+    def get_operator_context(self, profile: OperatorProfile) -> dict:
         return {
-            "active_profile": "ops-supervisor",
-            "role": "operator",
-            "tenant_scope": ["acme-support", "acme-ops", "acme-finance"],
-            "permissions": ["review", "approve", "replay", "contain_incident"],
+            "active_profile": profile.id,
+            "role": profile.role,
+            "tenant_scope": profile.tenant_scope,
+            "permissions": profile.permissions,
         }
 
     def list_operator_profiles(self) -> list[dict]:
         return [
             {
-                "id": "ops-supervisor",
-                "label": "Ops Supervisor",
-                "role": "operator",
-                "tenant_scope": ["acme-support", "acme-ops"],
-                "permissions": ["review", "approve", "replay"],
-            },
-            {
-                "id": "security-lead",
-                "label": "Security Lead",
-                "role": "security",
-                "tenant_scope": ["acme-finance", "acme-ops"],
-                "permissions": ["review", "contain_incident", "replay", "assign_owner"],
-            },
-            {
-                "id": "platform-admin",
-                "label": "Platform Admin",
-                "role": "admin",
-                "tenant_scope": ["acme-support", "acme-ops", "acme-finance"],
-                "permissions": ["review", "approve", "replay", "contain_incident", "assign_owner"],
-            },
+                "id": profile.id,
+                "label": profile.label,
+                "role": profile.role,
+                "tenant_scope": profile.tenant_scope,
+                "permissions": profile.permissions,
+            }
+            for profile in PROFILES.values()
         ]
+
+    def list_tenants(self) -> list[dict]:
+        return TENANTS
+
+    def list_policy_bundles(self) -> list[dict]:
+        return POLICY_BUNDLES
 
     def render_report_markdown(self, run_id: str) -> str:
         detail = self.get_run_detail(run_id)
@@ -231,7 +241,17 @@ class ControlPlaneService:
     def update_incident(self, run_id: str, action: str, owner: str | None) -> Incident | None:
         return self.repository.update_incident(run_id, action, owner)
 
-    def create_replay(self, run_id: str, mode: str) -> dict:
-        replay = self.repository.create_replay(run_id, mode)
-        compare = self.repository.compare_runs(run_id, replay.run_id)
+    def queue_replay(self, run_id: str, mode: str, requested_by: str) -> ReplayJob:
+        return self.repository.create_replay_job(run_id, mode, requested_by)
+
+    def complete_replay_job(self, job_id: str) -> dict:
+        job = self.repository.get_job(job_id)
+        replay = self.repository.create_replay(job.run_id, job.mode, job.id)
+        compare = self.repository.compare_runs(job.run_id, replay.run_id)
         return {"replay": replay, "compare": compare}
+
+    def get_job(self, job_id: str) -> ReplayJob:
+        return self.repository.get_job(job_id)
+
+    def claim_next_replay_job(self) -> ReplayJob | None:
+        return self.repository.claim_next_replay_job()

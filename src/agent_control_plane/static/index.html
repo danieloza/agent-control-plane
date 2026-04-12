@@ -11,107 +11,248 @@
 </head>
 <body>
   <div class="backdrop"></div>
+  <div class="topbar">
+    <div class="topbar-copy">
+      <span class="eyebrow" data-tooltip="This cockpit is the production-oriented slice of the project, not just a seeded demo view.">Production Slice</span>
+      <span id="auth-pill" class="auth-pill" data-tooltip="Shows which operator identity and role the UI is currently using for decisions and visibility.">Profile mode</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="ghost" data-login="ops.demo" data-tooltip="Switch to the operator view used for day-to-day approval and review work.">Login as Ops</button>
+      <button class="ghost" data-login="security.demo" data-tooltip="Switch to the security view used for blocked runs, incidents, and stricter policy review.">Login as Security</button>
+      <button class="ghost" data-login="admin.demo" data-tooltip="Switch to the admin view with tenant, policy, and platform-level surfaces.">Login as Admin</button>
+      <button id="help-trigger" class="ghost help-trigger" data-tooltip="Open quick help and keyboard shortcuts. You can also press ? anywhere outside form fields.">?</button>
+    </div>
+  </div>
+  <div id="loading-bar" class="loading-bar"></div>
+  <div id="toast-region" class="toast-region" aria-live="polite"></div>
+  <div id="onboarding-card" class="onboarding-card is-hidden" aria-live="polite">
+    <div class="eyebrow">Quick Guide</div>
+    <div id="onboarding-title" class="title">Cockpit tour</div>
+    <div id="onboarding-body" class="small muted"></div>
+    <div class="onboarding-actions">
+      <span id="onboarding-step" class="mono"></span>
+      <div class="onboarding-buttons">
+        <button id="onboarding-skip" class="ghost">Dismiss</button>
+        <button id="onboarding-next">Next</button>
+      </div>
+    </div>
+  </div>
+  <div id="help-card" class="help-card is-hidden" aria-live="polite">
+    <div class="eyebrow">Help</div>
+    <div class="title">Keyboard shortcuts</div>
+    <div class="help-list">
+      <div class="help-row"><span class="mono">?</span><span class="small muted">Open this help panel.</span></div>
+      <div class="help-row"><span class="mono">Esc</span><span class="small muted">Close help, dismiss onboarding, and clear tooltip focus.</span></div>
+    </div>
+    <div class="title">How to read the cockpit</div>
+    <div class="help-list">
+      <div class="help-row"><span class="mono">1</span><span class="small muted">Start in Runs to find the item that needs action.</span></div>
+      <div class="help-row"><span class="mono">2</span><span class="small muted">Use Operator Brief to understand impact and the recommended next step.</span></div>
+      <div class="help-row"><span class="mono">3</span><span class="small muted">Take action in Action Console, then open Diagnostics only if you need deeper evidence.</span></div>
+    </div>
+    <div class="onboarding-actions">
+      <span class="mono">Press Esc to close</span>
+      <div class="onboarding-buttons">
+        <button id="help-tour" class="ghost">Replay Tour</button>
+        <button id="help-close">Close</button>
+      </div>
+    </div>
+  </div>
+  <div id="loading-overlay" class="loading-overlay is-hidden">
+    <div class="loading-card">
+      <div class="loading-spinner"></div>
+      <div class="title">Refreshing control plane</div>
+      <div class="small muted">Syncing runs, jobs, notes, and admin surfaces.</div>
+    </div>
+  </div>
   <main class="shell">
     <section class="hero">
       <div>
         <p class="eyebrow">Agent Mission Control</p>
         <h1>Run, govern, replay, and audit AI agents like a real product team.</h1>
+        <p class="hero-subtitle">Operator workstation with persistent state, worker-backed replay jobs, auditability, and tenant-aware controls.</p>
       </div>
       <div class="hero-actions">
-        <select id="profile-select"></select>
-        <select id="scenario-select"></select>
-        <button id="launch-button" class="primary">Launch Scenario</button>
+        <select id="profile-select" data-tooltip="Manual profile switch for demo mode. Selecting a profile changes what you can see and which actions you are allowed to take."></select>
+        <select id="run-filter" data-tooltip="Filter the run queue by operational status so you can focus only on the runs that need attention.">
+          <option value="">All Runs</option>
+          <option value="approval_required">Approval Required</option>
+          <option value="blocked">Blocked</option>
+          <option value="completed">Completed</option>
+        </select>
+        <select id="scenario-select" data-tooltip="Choose a seeded scenario to create a fresh run and see how the control plane reacts."></select>
+        <button id="launch-button" class="primary" data-tooltip="Start a new run from the selected scenario and push it into the control plane workflow.">Launch Scenario</button>
       </div>
     </section>
 
     <section class="overview-grid" id="overview-grid"></section>
 
-    <section class="main-grid">
+    <section class="main-grid simplified">
       <aside class="panel stack">
-        <div class="panel-header">
-          <h2>Runs</h2>
+        <div class="panel-header" id="runs-header">
+          <h2 data-tooltip="This is the primary operator queue. Start here to see which runs are healthy, waiting for approval, or blocked.">Runs</h2>
           <span class="mono" id="run-count">0</span>
         </div>
         <div id="run-list" class="run-list"></div>
       </aside>
 
-      <section class="panel stack">
-        <div class="panel-header">
-          <h2>Execution Timeline</h2>
-          <span class="mono" id="active-run-label">No run selected</span>
-        </div>
-        <div id="timeline" class="timeline"></div>
+      <section class="focus-column">
+        <section class="panel stack">
+          <div class="panel-header" id="brief-header">
+            <h2 data-tooltip="Summarizes what happened in the active run, why it matters, and what the operator should do next.">Operator Brief</h2>
+            <span class="mono" id="active-run-label">No run selected</span>
+          </div>
+          <div id="operator-brief" class="summary-card operator-brief"></div>
+        </section>
+
+        <section class="panel stack">
+          <div class="panel-header">
+            <h2 data-tooltip="Explains the active run step by step, including which boundary or policy decision affected the outcome.">Execution Timeline</h2>
+            <span class="mono">Why it happened</span>
+          </div>
+          <div id="timeline" class="timeline"></div>
+        </section>
       </section>
 
       <aside class="panel stack">
-        <div class="panel-header">
-          <h2>Command View</h2>
-          <span class="mono">Operator</span>
+        <div class="panel-header" id="action-console-header">
+          <h2 data-tooltip="This is the decision surface. Use it to approve, reject, escalate, contain incidents, or trigger a replay.">Action Console</h2>
+          <span class="mono">Next step</span>
         </div>
         <div id="run-summary" class="summary-card"></div>
         <div class="action-group">
-          <button data-action="approve">Approve</button>
-          <button data-action="reject">Reject</button>
-          <button data-action="escalate">Escalate</button>
+          <button data-action="approve" data-tooltip="Allow the active run to proceed or be released after review.">Approve</button>
+          <button data-action="reject" data-tooltip="Reject the active run when the output or requested action should not be allowed.">Reject</button>
+          <button data-action="escalate" data-tooltip="Send the active run for higher-level review when the decision should not be made here.">Escalate</button>
         </div>
         <div class="action-group">
-          <button data-incident="contain">Contain</button>
-          <button data-incident="mitigate">Mitigate</button>
-          <button data-incident="reopen">Reopen</button>
+          <button data-incident="contain" data-tooltip="Apply containment when the run represents an active risk or should remain isolated.">Contain</button>
+          <button data-incident="mitigate" data-tooltip="Mark that mitigating action has been taken and the incident is being handled.">Mitigate</button>
+          <button data-incident="reopen" data-tooltip="Reopen the incident if new evidence suggests it still requires investigation.">Reopen</button>
         </div>
         <div class="action-group">
-          <button id="replay-button" class="secondary">Replay Under Stricter Controls</button>
+          <button id="replay-button" class="secondary" data-tooltip="Queue a replay of the active run under a stricter policy bundle to compare outcomes and risk.">Replay Under Stricter Controls</button>
         </div>
         <div id="compare-card" class="summary-card faint"></div>
         <div id="incident-card" class="summary-card faint"></div>
         <div class="summary-card faint">
-          <div class="label">Compare Against</div>
-          <select id="compare-run-select"></select>
-          <button id="compare-button">Load Compare</button>
+          <div class="label" data-tooltip="Pick another run to compare against the active one after a replay or investigation.">Compare Against</div>
+          <select id="compare-run-select" data-tooltip="Select the comparison target for the active run."></select>
+          <button id="compare-button" data-tooltip="Load a compact comparison between the active run and the selected run.">Load Compare</button>
         </div>
       </aside>
     </section>
 
-    <section class="secondary-grid">
-      <section class="panel stack">
-        <div class="panel-header">
-          <h2>Review Queue</h2>
+    <section class="accordion-stack">
+      <details class="panel disclosure" open>
+        <summary class="disclosure-summary">
+          <div>
+            <h2>Team Workflow</h2>
+            <p>Queue, activity, notes, and audit for day-to-day operator work.</p>
+          </div>
+          <span class="mono">Collaborate</span>
+        </summary>
+        <div class="secondary-grid disclosure-body">
+          <section class="stack">
+            <div class="panel-header">
+              <h2>Review Queue</h2>
+            </div>
+            <div id="review-queue" class="queue-list"></div>
+          </section>
+          <section class="stack">
+            <div class="panel-header">
+              <h2>Activity Stream</h2>
+            </div>
+            <div id="activity-stream" class="activity-list"></div>
+          </section>
+          <section class="stack">
+            <div class="panel-header">
+              <h2>Operator Notes</h2>
+            </div>
+            <textarea id="note-input" class="note-input" placeholder="Attach an operator note to the active run..."></textarea>
+            <button id="note-button">Add Note</button>
+            <div id="notes-list" class="activity-list"></div>
+          </section>
+          <section class="stack full-span">
+            <div class="panel-header">
+              <h2>Audit Trail</h2>
+            </div>
+            <div id="audit-list" class="activity-list"></div>
+          </section>
         </div>
-        <div id="review-queue" class="queue-list"></div>
-      </section>
-      <section class="panel stack">
-        <div class="panel-header">
-          <h2>Activity Stream</h2>
-        </div>
-        <div id="activity-stream" class="activity-list"></div>
-      </section>
-      <section class="panel stack">
-        <div class="panel-header">
-          <h2>Eval Scorecards</h2>
-        </div>
-        <div id="eval-board" class="eval-board"></div>
-      </section>
-    </section>
+      </details>
 
-    <section class="secondary-grid">
-      <section class="panel stack">
-        <div class="panel-header">
-          <h2>Trace Graph</h2>
+      <details class="panel disclosure">
+        <summary class="disclosure-summary" id="diagnostics-header">
+          <div>
+            <h2>Diagnostics</h2>
+            <p>Trace, compare, replay, and evaluation views for deeper investigation.</p>
+          </div>
+          <span class="mono">Investigate</span>
+        </summary>
+        <div class="secondary-grid disclosure-body">
+          <section class="stack">
+            <div class="panel-header">
+              <h2>Trace Graph</h2>
+            </div>
+            <div id="trace-graph" class="graph-list"></div>
+          </section>
+          <section class="stack">
+            <div class="panel-header">
+              <h2>Comparison Matrix</h2>
+            </div>
+            <div id="comparison-matrix" class="matrix-list"></div>
+          </section>
+          <section class="stack">
+            <div class="panel-header">
+              <h2>Replay Jobs</h2>
+            </div>
+            <div id="jobs-list" class="queue-list"></div>
+          </section>
+          <section class="stack">
+            <div class="panel-header">
+              <h2>Eval Scorecards</h2>
+            </div>
+            <div id="eval-board" class="eval-board"></div>
+          </section>
+          <section class="stack">
+            <div class="panel-header">
+              <h2>Queue Ownership</h2>
+            </div>
+            <div id="queue-summary" class="queue-list"></div>
+          </section>
         </div>
-        <div id="trace-graph" class="graph-list"></div>
-      </section>
-      <section class="panel stack">
-        <div class="panel-header">
-          <h2>Queue Ownership</h2>
+      </details>
+
+      <details class="panel disclosure admin-panel">
+        <summary class="disclosure-summary">
+          <div>
+            <h2>Platform Administration</h2>
+            <p>Tenant, policy, and platform health surfaces for administrative users.</p>
+          </div>
+          <span class="mono">Admin</span>
+        </summary>
+        <div class="secondary-grid disclosure-body">
+          <section class="stack">
+            <div class="panel-header">
+              <h2>Admin Surfaces</h2>
+            </div>
+            <div id="tenant-list" class="queue-list"></div>
+          </section>
+          <section class="stack">
+            <div class="panel-header">
+              <h2>Policy Registry</h2>
+            </div>
+            <div id="policy-list" class="queue-list"></div>
+          </section>
+          <section class="stack">
+            <div class="panel-header">
+              <h2>Platform Signals</h2>
+            </div>
+            <div id="platform-signals" class="queue-list"></div>
+          </section>
         </div>
-        <div id="queue-summary" class="queue-list"></div>
-      </section>
-      <section class="panel stack">
-        <div class="panel-header">
-          <h2>Comparison Matrix</h2>
-        </div>
-        <div id="comparison-matrix" class="matrix-list"></div>
-      </section>
+      </details>
     </section>
   </main>
 

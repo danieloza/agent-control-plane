@@ -4,3 +4,8 @@ __pycache__/
 .venv/
 src/*.egg-info/
 src/agent_control_plane.egg-info/
+agent_control_plane.db
+*.sqlite3
+.playwright-cli/
+.runtime/
+agent_control_plane_local.db

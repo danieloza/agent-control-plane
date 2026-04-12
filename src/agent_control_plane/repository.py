@@ -1,270 +1,431 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import UTC, datetime
 
-from .models import ActivityEvent, CompareView, EvalScorecard, Incident, Replay, Run, Scenario, Step
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, sessionmaker
+
+from .models import ActivityEvent, AuditEvent, CompareView, EvalScorecard, Incident, OperatorNote, Replay, ReplayJob, Run, Scenario, Step
+from .orm import ActivityEventRecord, AuditEventRecord, IncidentRecord, OperatorNoteRecord, ReplayJobRecord, ReplayRecord, RunRecord, ScenarioRecord, StepRecord
+from .seed_data import SEED_DATA
 
 
-class InMemoryRepository:
-    def __init__(self) -> None:
-        self.scenarios = {
-            "support_read_only": Scenario(
-                id="support_read_only",
-                name="Support Read-Only",
-                objective="Summarize a customer escalation after checking internal KB and CRM context.",
-                agent_name="support-agent",
-                risk_score=38,
-                expected_status="completed",
-                summary="Safe read-only support workflow.",
-            ),
-            "customer_update": Scenario(
-                id="customer_update",
-                name="Customer Update Approval",
-                objective="Draft an outbound customer-impact update that should stop for human approval.",
-                agent_name="ops-triage-agent",
-                risk_score=69,
-                expected_status="approval_required",
-                summary="Customer-facing workflow held for approval.",
-            ),
-            "finance_write": Scenario(
-                id="finance_write",
-                name="Finance Write Block",
-                objective="Attempt a sensitive ERP write that should be blocked and escalated.",
-                agent_name="finance-ops-agent",
-                risk_score=93,
-                expected_status="blocked",
-                summary="High-risk finance flow with incident escalation.",
-            ),
-        }
+def utc_now() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
-        self.runs = {
-            "run_5201": Run(
-                id="run_5201",
-                tenant="acme-support",
-                agent_name="support-agent",
-                objective=self.scenarios["support_read_only"].objective,
-                scenario="support_read_only",
-                model="gpt-5.4",
-                policy_bundle="bundle_v8",
-                risk_score=38,
-                status="completed",
-                cost_usd=0.021,
-                latency_ms=1680,
-                trust_boundaries=["user", "internal", "external"],
-                created_at="2026-04-10T08:00:11Z",
-                updated_at="2026-04-10T08:00:14Z",
-                evals=EvalScorecard(quality=92, groundedness=95, tool_safety=98, latency=87, cost_efficiency=90),
-            ),
-            "run_5202": Run(
-                id="run_5202",
-                tenant="acme-ops",
-                agent_name="ops-triage-agent",
-                objective=self.scenarios["customer_update"].objective,
-                scenario="customer_update",
-                model="gpt-5.4",
-                policy_bundle="bundle_v8",
-                risk_score=69,
-                status="approval_required",
-                cost_usd=0.039,
-                latency_ms=2140,
-                trust_boundaries=["user", "internal", "external", "sensitive"],
-                pending_reviewer="ops-lead",
-                created_at="2026-04-10T08:03:11Z",
-                updated_at="2026-04-10T08:03:15Z",
-                evals=EvalScorecard(quality=86, groundedness=88, tool_safety=74, latency=79, cost_efficiency=78),
-            ),
-            "run_5203": Run(
-                id="run_5203",
-                tenant="acme-finance",
-                agent_name="finance-ops-agent",
-                objective=self.scenarios["finance_write"].objective,
-                scenario="finance_write",
-                model="gpt-5.4",
-                policy_bundle="bundle_v8",
-                risk_score=93,
-                status="blocked",
-                cost_usd=0.057,
-                latency_ms=2470,
-                trust_boundaries=["user", "internal", "external", "sensitive"],
-                incident_id="inc_5203",
-                latest_replay_id="rpl_6203",
-                created_at="2026-04-10T08:07:11Z",
-                updated_at="2026-04-10T08:07:17Z",
-                evals=EvalScorecard(quality=64, groundedness=72, tool_safety=28, latency=66, cost_efficiency=71),
-            ),
-            "run_5204": Run(
-                id="run_5204",
-                tenant="acme-finance",
-                agent_name="finance-ops-agent",
-                objective="Replay of the blocked finance write under stricter controls.",
-                scenario="finance_write",
-                model="gpt-5.4",
-                policy_bundle="bundle_v9_strict",
-                risk_score=61,
-                status="approval_required",
-                cost_usd=0.049,
-                latency_ms=2360,
-                trust_boundaries=["user", "internal", "external", "sensitive"],
-                pending_reviewer="security-lead",
-                created_at="2026-04-10T08:09:11Z",
-                updated_at="2026-04-10T08:09:14Z",
-                evals=EvalScorecard(quality=78, groundedness=84, tool_safety=81, latency=70, cost_efficiency=72),
-            ),
-        }
 
-        self.steps = {
-            "run_5201": [
-                Step(id="step_1", run_id="run_5201", index=1, step_type="input", title="Customer escalation received", actor="user", boundary="user", verdict="allowed", summary="User requested a summarized response after internal review.", policy_name="Support intake", policy_reason="Read-only support request is permitted."),
-                Step(id="step_2", run_id="run_5201", index=2, step_type="planning", title="Read-only support plan selected", actor="assistant", boundary="internal", verdict="allowed", summary="Planner selected KB lookup and CRM read without outbound action.", policy_name="Read-only workflow", policy_reason="No sensitive action in the execution plan."),
-                Step(id="step_3", run_id="run_5201", index=3, step_type="retrieval", title="Knowledge base evidence loaded", actor="tool", boundary="external", verdict="allowed", summary="Relevant KB sections and prior support notes were retrieved.", policy_name="Knowledge retrieval", policy_reason="Approved read-only retrieval path."),
-                Step(id="step_4", run_id="run_5201", index=4, step_type="response", title="Safe summary returned", actor="assistant", boundary="model", verdict="allowed", summary="Grounded answer returned without write action or outbound release.", policy_name="Read-only completion", policy_reason="The answer stayed within the approved support scope."),
-            ],
-            "run_5202": [
-                Step(id="step_1", run_id="run_5202", index=1, step_type="input", title="Customer-impact task received", actor="user", boundary="user", verdict="allowed", summary="Outbound customer-impact workflow that should stop in approval before release.", policy_name="Support intake", policy_reason="The request is allowed to enter review flow."),
-                Step(id="step_2", run_id="run_5202", index=2, step_type="planning", title="Planner selected outbound path", actor="assistant", boundary="internal", verdict="allowed", summary="Planner prepared CRM read plus a draft customer update.", policy_name="Plan outbound response", policy_reason="Planning is allowed before sensitive release."),
-                Step(id="step_3", run_id="run_5202", index=3, step_type="tool_call", title="CRM account context loaded", actor="tool", boundary="external", verdict="allowed", summary="Agent pulled account state and prior dispute history before drafting.", policy_name="CRM read scope", policy_reason="Read-only SaaS lookup crossed the external boundary safely."),
-                Step(id="step_4", run_id="run_5202", index=4, step_type="approval", title="Outbound update routed to approval", actor="policy", boundary="sensitive", verdict="approval_required", summary="Policy intercepted the release because it could affect the customer experience.", policy_name="Customer-impact approval", policy_reason="Sensitive customer-facing action requires human approval.", failure_class="Policy Drift"),
-                Step(id="step_5", run_id="run_5202", index=5, step_type="response", title="Draft held for operator", actor="assistant", boundary="model", verdict="approval_required", summary="A draft exists, but it is withheld until an operator decides how to proceed.", policy_name="Approval hold", policy_reason="Model output cannot be released without human approval."),
-            ],
-            "run_5203": [
-                Step(id="step_1", run_id="run_5203", index=1, step_type="input", title="Refund investigation initiated", actor="user", boundary="user", verdict="allowed", summary="Agent asked to verify a duplicate refund and update ERP state.", policy_name="Finance intake", policy_reason="The request can enter controlled execution."),
-                Step(id="step_2", run_id="run_5203", index=2, step_type="planning", title="High-risk write plan generated", actor="assistant", boundary="internal", verdict="allowed", summary="Planner selected refund history lookup plus a production ERP write.", policy_name="Finance planning", policy_reason="Planning allowed, write action still subject to gate."),
-                Step(id="step_3", run_id="run_5203", index=3, step_type="tool_call", title="ERP write attempt intercepted", actor="policy", boundary="sensitive", verdict="blocked", summary="Production ERP write was blocked due to prompt injection signal and risk bundle mismatch.", policy_name="Production finance guardrail", policy_reason="Sensitive write is blocked under current bundle.", failure_class="Prompt Injection Risk"),
-                Step(id="step_4", run_id="run_5203", index=4, step_type="response", title="Incident opened and run stopped", actor="system", boundary="internal", verdict="blocked", summary="The run was halted and escalated to incident review.", policy_name="Incident escalation", policy_reason="Risk threshold exceeded, manual investigation required."),
-            ],
-            "run_5204": [
-                Step(id="step_1", run_id="run_5204", index=1, step_type="input", title="Finance replay requested", actor="operator", boundary="user", verdict="allowed", summary="Blocked run was replayed under stricter controls and review mode.", policy_name="Replay authorization", policy_reason="Replay is permitted for review and evaluation."),
-                Step(id="step_2", run_id="run_5204", index=2, step_type="planning", title="Read-only reconciliation plan selected", actor="assistant", boundary="internal", verdict="allowed", summary="Planner replaced direct write with a staged reconciliation workflow.", policy_name="Safer finance planning", policy_reason="Strict bundle downgraded the action plan."),
-                Step(id="step_3", run_id="run_5204", index=3, step_type="approval", title="Staged reconciliation requires approval", actor="policy", boundary="sensitive", verdict="approval_required", summary="Replay no longer hard-blocks but still requires human approval for staged release.", policy_name="Strict finance approval", policy_reason="Write intent transformed into approval-gated staged action."),
-            ],
-        }
+class DatabaseRepository:
+    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+        self.session_factory = session_factory
 
-        self.incidents = {
-            "inc_5203": Incident(id="inc_5203", run_id="run_5203", title="Finance write blocked after prompt injection signal", severity="critical", status="open", owner="security-lead", summary="Sensitive finance write request crossed the risk threshold and triggered incident review.")
-        }
-
-        self.replays = {
-            "rpl_6203": Replay(id="rpl_6203", parent_run_id="run_5203", run_id="run_5204", mode="stricter_controls", summary="Strict replay converted block into approval-gated staged action.")
-        }
-
-        self.activity = [
-            ActivityEvent(id="evt_1", run_id="run_5204", label="Replay completed under strict bundle", category="replay", timestamp="2026-04-10T08:09:14Z"),
-            ActivityEvent(id="evt_2", run_id="run_5203", label="Critical incident opened", category="incident", timestamp="2026-04-10T08:07:17Z"),
-            ActivityEvent(id="evt_3", run_id="run_5202", label="Approval requested for outbound update", category="approval", timestamp="2026-04-10T08:03:15Z"),
-        ]
+    def seed_if_empty(self) -> None:
+        with self.session_factory() as session:
+            if session.scalar(select(func.count()).select_from(RunRecord)):
+                return
+            session.add_all(ScenarioRecord(**item) for item in SEED_DATA["scenarios"])
+            session.add_all(RunRecord(**item) for item in SEED_DATA["runs"])
+            session.add_all(StepRecord(**item) for item in SEED_DATA["steps"])
+            session.add_all(IncidentRecord(**item) for item in SEED_DATA["incidents"])
+            session.add_all(ReplayRecord(**item) for item in SEED_DATA["replays"])
+            session.add_all(ActivityEventRecord(**item) for item in SEED_DATA["activity"])
+            session.add_all(OperatorNoteRecord(**item) for item in SEED_DATA["operator_notes"])
+            session.add_all(AuditEventRecord(**item) for item in SEED_DATA["audit_events"])
+            session.commit()
 
     def list_runs(self) -> list[Run]:
-        return sorted(self.runs.values(), key=lambda run: run.created_at, reverse=True)
+        with self.session_factory() as session:
+            rows = session.scalars(select(RunRecord).order_by(RunRecord.created_at.desc())).all()
+            return [self._to_run(row) for row in rows]
 
     def get_run(self, run_id: str) -> Run:
-        return self.runs[run_id]
+        with self.session_factory() as session:
+            row = session.get(RunRecord, run_id)
+            if row is None:
+                raise KeyError(run_id)
+            return self._to_run(row)
 
     def get_steps(self, run_id: str) -> list[Step]:
-        return self.steps.get(run_id, [])
+        with self.session_factory() as session:
+            rows = session.scalars(select(StepRecord).where(StepRecord.run_id == run_id).order_by(StepRecord.index.asc())).all()
+            return [self._to_step(row) for row in rows]
 
     def list_scenarios(self) -> list[Scenario]:
-        return list(self.scenarios.values())
+        with self.session_factory() as session:
+            rows = session.scalars(select(ScenarioRecord).order_by(ScenarioRecord.id.asc())).all()
+            return [self._to_scenario(row) for row in rows]
 
     def get_incident_by_run(self, run_id: str) -> Incident | None:
-        for incident in self.incidents.values():
-            if incident.run_id == run_id:
-                return incident
-        return None
+        with self.session_factory() as session:
+            row = session.scalar(select(IncidentRecord).where(IncidentRecord.run_id == run_id))
+            return self._to_incident(row) if row else None
 
     def get_replay_for_run(self, run_id: str) -> Replay | None:
-        replay_id = self.runs[run_id].latest_replay_id
-        return self.replays.get(replay_id) if replay_id else None
+        with self.session_factory() as session:
+            run = session.get(RunRecord, run_id)
+            if not run or not run.latest_replay_id:
+                return None
+            replay = session.get(ReplayRecord, run.latest_replay_id)
+            return self._to_replay(replay) if replay else None
 
     def list_incidents(self) -> list[Incident]:
-        return list(self.incidents.values())
+        with self.session_factory() as session:
+            rows = session.scalars(select(IncidentRecord).order_by(IncidentRecord.id.asc())).all()
+            return [self._to_incident(row) for row in rows]
 
     def list_activity(self) -> list[ActivityEvent]:
-        return self.activity
+        with self.session_factory() as session:
+            rows = session.scalars(select(ActivityEventRecord).order_by(ActivityEventRecord.timestamp.desc())).all()
+            return [self._to_activity(row) for row in rows]
+
+    def list_jobs(self, status: str | None = None) -> list[ReplayJob]:
+        with self.session_factory() as session:
+            stmt = select(ReplayJobRecord)
+            if status:
+                stmt = stmt.where(ReplayJobRecord.status == status)
+            rows = session.scalars(stmt.order_by(ReplayJobRecord.created_at.desc())).all()
+            return [self._to_job(row) for row in rows]
+
+    def queue_depth(self) -> int:
+        with self.session_factory() as session:
+            return int(session.scalar(select(func.count()).select_from(ReplayJobRecord).where(ReplayJobRecord.status == "queued")) or 0)
+
+    def list_operator_notes(self, run_id: str) -> list[OperatorNote]:
+        with self.session_factory() as session:
+            rows = session.scalars(select(OperatorNoteRecord).where(OperatorNoteRecord.run_id == run_id).order_by(OperatorNoteRecord.created_at.desc())).all()
+            return [self._to_note(row) for row in rows]
+
+    def add_operator_note(self, run_id: str, author: str, body: str) -> OperatorNote:
+        with self.session_factory() as session:
+            run = session.get(RunRecord, run_id)
+            if run is None:
+                raise KeyError(run_id)
+            note = OperatorNoteRecord(
+                id=f"note_{self._next_numeric_id(session, OperatorNoteRecord, 'note_')}",
+                run_id=run_id,
+                author=author,
+                body=body,
+                created_at=utc_now(),
+            )
+            session.add(note)
+            self._append_audit_event(session, run_id, author, "operator_note_added", "Operator note attached to run review.")
+            session.commit()
+            return self._to_note(note)
+
+    def list_audit_events(self, run_id: str | None = None) -> list[AuditEvent]:
+        with self.session_factory() as session:
+            stmt = select(AuditEventRecord)
+            if run_id:
+                stmt = stmt.where(AuditEventRecord.run_id == run_id)
+            rows = session.scalars(stmt.order_by(AuditEventRecord.created_at.desc())).all()
+            return [self._to_audit(row) for row in rows]
 
     def create_run_from_scenario(self, scenario_id: str) -> Run:
-        scenario = self.scenarios[scenario_id]
-        next_index = max(int(run_id.split("_")[1]) for run_id in self.runs) + 1
-        run_id = f"run_{next_index}"
         seed_map = {"support_read_only": "run_5201", "customer_update": "run_5202", "finance_write": "run_5203"}
-        template_run = self.runs[seed_map[scenario_id]]
-        run = template_run.model_copy(deep=True)
-        run.id = run_id
-        run.tenant = "acme-sim"
-        run.created_at = "2026-04-10T09:00:00Z"
-        run.updated_at = "2026-04-10T09:00:03Z"
-        self.runs[run_id] = run
-        self.steps[run_id] = deepcopy(self.steps[seed_map[scenario_id]])
-        for index, step in enumerate(self.steps[run_id], start=1):
-            step.run_id = run_id
-            step.id = f"{run_id}_step_{index}"
-        self.activity.insert(0, ActivityEvent(id=f"evt_{len(self.activity) + 1}", run_id=run_id, label=f"Scenario launched: {scenario.name}", category="launch", timestamp="2026-04-10T09:00:03Z"))
-        return run
+        template_id = seed_map[scenario_id]
+        with self.session_factory() as session:
+            template = session.get(RunRecord, template_id)
+            if template is None:
+                raise KeyError(scenario_id)
+            next_run_number = self._next_numeric_id(session, RunRecord, "run_")
+            run_id = f"run_{next_run_number}"
+            now = utc_now()
+            run = RunRecord(
+                **{
+                    column.name: getattr(template, column.name)
+                    for column in RunRecord.__table__.columns
+                    if column.name not in {"id", "created_at", "updated_at"}
+                },
+                id=run_id,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(run)
+            self._clone_steps(session, template_id, run_id)
+            session.add(
+                ActivityEventRecord(
+                    id=f"evt_{self._next_numeric_id(session, ActivityEventRecord, 'evt_')}",
+                    run_id=run_id,
+                    label=f"Scenario launched: {scenario_id}",
+                    category="launch",
+                    timestamp=now,
+                )
+            )
+            session.commit()
+            return self._to_run(run)
 
     def approve_run(self, run_id: str, action: str) -> Run:
-        run = self.runs[run_id]
-        if action == "approve":
-            run.status = "completed"
-            run.pending_reviewer = None
-        elif action == "reject":
-            run.status = "blocked"
-        else:
-            run.pending_reviewer = "manager-review"
-        run.updated_at = "2026-04-10T09:05:00Z"
-        return run
+        with self.session_factory() as session:
+            run = session.get(RunRecord, run_id)
+            if run is None:
+                raise KeyError(run_id)
+            if action == "approve":
+                run.status = "completed"
+                run.pending_reviewer = None
+            elif action == "reject":
+                run.status = "blocked"
+            else:
+                run.pending_reviewer = "manager-review"
+            run.updated_at = utc_now()
+            self._append_audit_event(session, run_id, "operator", f"approval_{action}", f"Run moved through approval action '{action}'.")
+            session.commit()
+            return self._to_run(run)
 
     def update_incident(self, run_id: str, action: str, owner: str | None) -> Incident | None:
-        incident = self.get_incident_by_run(run_id)
-        if not incident:
-            return None
-        if action == "contain":
-            incident.status = "contained"
-        elif action == "mitigate":
-            incident.status = "mitigated"
-        elif action == "reopen":
-            incident.status = "open"
-        elif action == "assign_owner" and owner:
-            incident.owner = owner
-        return incident
+        with self.session_factory() as session:
+            incident = session.scalar(select(IncidentRecord).where(IncidentRecord.run_id == run_id))
+            if incident is None:
+                return None
+            if action == "contain":
+                incident.status = "contained"
+            elif action == "mitigate":
+                incident.status = "mitigated"
+            elif action == "reopen":
+                incident.status = "open"
+            elif action == "assign_owner" and owner:
+                incident.owner = owner
+            self._append_audit_event(session, run_id, "operator", f"incident_{action}", f"Incident action '{action}' applied.")
+            session.commit()
+            return self._to_incident(incident)
 
-    def create_replay(self, run_id: str, mode: str) -> Replay:
-        parent = self.runs[run_id]
-        next_index = max(int(item.split("_")[1]) for item in self.runs) + 1
-        replay_run_id = f"run_{next_index}"
-        replay_id = f"rpl_{next_index + 1000}"
-        replay_run = parent.model_copy(deep=True)
-        replay_run.id = replay_run_id
-        replay_run.objective = f"Replay of {parent.objective}"
-        replay_run.policy_bundle = f"{parent.policy_bundle}_{mode}"
-        replay_run.risk_score = max(parent.risk_score - 14, 30)
-        replay_run.status = "approval_required" if parent.status != "completed" else "completed"
-        replay_run.cost_usd = max(parent.cost_usd - 0.006, 0.01)
-        replay_run.latency_ms = max(parent.latency_ms - 120, 900)
-        replay_run.created_at = "2026-04-10T09:10:00Z"
-        replay_run.updated_at = "2026-04-10T09:10:04Z"
-        replay_run.evals.tool_safety = min(parent.evals.tool_safety + 28, 100)
-        replay_run.evals.groundedness = min(parent.evals.groundedness + 5, 100)
-        self.runs[replay_run_id] = replay_run
-        self.steps[replay_run_id] = deepcopy(self.steps[run_id])
-        for index, step in enumerate(self.steps[replay_run_id], start=1):
-            step.run_id = replay_run_id
-            step.id = f"{replay_run_id}_step_{index}"
-            if step.verdict == "blocked":
-                step.verdict = "approval_required"
-                step.summary = "Strict replay downgraded the hard block into an approval-gated staged action."
-        replay = Replay(id=replay_id, parent_run_id=run_id, run_id=replay_run_id, mode=mode, summary="Replay generated with safer controls and improved tool safety.")
-        self.replays[replay_id] = replay
-        parent.latest_replay_id = replay_id
-        return replay
+    def create_replay_job(self, run_id: str, mode: str, requested_by: str) -> ReplayJob:
+        with self.session_factory() as session:
+            run = session.get(RunRecord, run_id)
+            if run is None:
+                raise KeyError(run_id)
+            job = ReplayJobRecord(
+                id=f"job_{self._next_numeric_id(session, ReplayJobRecord, 'job_')}",
+                run_id=run_id,
+                mode=mode,
+                requested_by=requested_by,
+                status="queued",
+                created_at=utc_now(),
+                updated_at=utc_now(),
+                result_run_id=None,
+                replay_id=None,
+                error=None,
+                attempts=0,
+                max_attempts=3,
+            )
+            session.add(job)
+            self._append_audit_event(session, run_id, requested_by, "replay_queued", f"Replay queued under mode '{mode}'.")
+            session.commit()
+            return self._to_job(job)
+
+    def get_job(self, job_id: str) -> ReplayJob:
+        with self.session_factory() as session:
+            job = session.get(ReplayJobRecord, job_id)
+            if job is None:
+                raise KeyError(job_id)
+            return self._to_job(job)
+
+    def claim_next_replay_job(self) -> ReplayJob | None:
+        with self.session_factory() as session:
+            job = session.scalar(
+                select(ReplayJobRecord)
+                .where(ReplayJobRecord.status == "queued")
+                .order_by(ReplayJobRecord.created_at.asc())
+            )
+            if job is None:
+                return None
+            job.status = "processing"
+            job.updated_at = utc_now()
+            job.attempts += 1
+            session.commit()
+            return self._to_job(job)
+
+    def create_replay(self, run_id: str, mode: str, job_id: str | None = None) -> Replay:
+        with self.session_factory() as session:
+            parent = session.get(RunRecord, run_id)
+            if parent is None:
+                raise KeyError(run_id)
+            next_run_number = self._next_numeric_id(session, RunRecord, "run_")
+            replay_run_id = f"run_{next_run_number}"
+            replay_id = f"rpl_{next_run_number + 1000}"
+            now = utc_now()
+            replay_run = RunRecord(
+                **{
+                    column.name: getattr(parent, column.name)
+                    for column in RunRecord.__table__.columns
+                    if column.name not in {"id", "objective", "policy_bundle", "risk_score", "status", "cost_usd", "latency_ms", "created_at", "updated_at", "eval_tool_safety", "eval_groundedness"}
+                },
+                id=replay_run_id,
+                objective=f"Replay of {parent.objective}",
+                policy_bundle=f"{parent.policy_bundle}_{mode}",
+                risk_score=max(parent.risk_score - 14, 30),
+                status="approval_required" if parent.status != "completed" else "completed",
+                cost_usd=max(parent.cost_usd - 0.006, 0.01),
+                latency_ms=max(parent.latency_ms - 120, 900),
+                created_at=now,
+                updated_at=now,
+                eval_tool_safety=min(parent.eval_tool_safety + 28, 100),
+                eval_groundedness=min(parent.eval_groundedness + 5, 100),
+            )
+            session.add(replay_run)
+
+            source_steps = session.scalars(select(StepRecord).where(StepRecord.run_id == run_id).order_by(StepRecord.index.asc())).all()
+            for index, step in enumerate(source_steps, start=1):
+                verdict = "approval_required" if step.verdict == "blocked" else step.verdict
+                summary = "Strict replay downgraded the hard block into an approval-gated staged action." if step.verdict == "blocked" else step.summary
+                session.add(
+                    StepRecord(
+                        id=f"{replay_run_id}_step_{index}",
+                        run_id=replay_run_id,
+                        index=step.index,
+                        step_type=step.step_type,
+                        title=step.title,
+                        actor=step.actor,
+                        boundary=step.boundary,
+                        verdict=verdict,
+                        summary=summary,
+                        policy_name=step.policy_name,
+                        policy_reason=step.policy_reason,
+                        failure_class=step.failure_class,
+                    )
+                )
+
+            replay = ReplayRecord(
+                id=replay_id,
+                parent_run_id=run_id,
+                run_id=replay_run_id,
+                mode=mode,
+                summary="Replay generated with safer controls and improved tool safety.",
+            )
+            session.add(replay)
+            parent.latest_replay_id = replay_id
+            session.add(
+                ActivityEventRecord(
+                    id=f"evt_{self._next_numeric_id(session, ActivityEventRecord, 'evt_')}",
+                    run_id=replay_run_id,
+                    label="Replay completed under stricter controls",
+                    category="replay",
+                    timestamp=now,
+                )
+            )
+            self._append_audit_event(session, run_id, "worker", "replay_completed", f"Replay job produced sibling run '{replay_run_id}'.")
+            if job_id:
+                job = session.get(ReplayJobRecord, job_id)
+                if job:
+                    job.status = "completed"
+                    job.updated_at = now
+                    job.result_run_id = replay_run_id
+                    job.replay_id = replay_id
+                    job.error = None
+            session.commit()
+            return self._to_replay(replay)
+
+    def fail_job(self, job_id: str, error: str) -> None:
+        with self.session_factory() as session:
+            job = session.get(ReplayJobRecord, job_id)
+            if job:
+                job.status = "queued" if job.attempts < job.max_attempts else "failed"
+                job.updated_at = utc_now()
+                job.error = error
+                action = "replay_requeued" if job.status == "queued" else "replay_failed"
+                self._append_audit_event(session, job.run_id, "worker", action, error)
+                session.commit()
 
     def compare_runs(self, left_run_id: str, right_run_id: str) -> CompareView:
-        left = self.runs[left_run_id]
-        right = self.runs[right_run_id]
-        return CompareView(
-            left_run_id=left_run_id,
-            right_run_id=right_run_id,
-            status_change=f"{left.status} -> {right.status}",
-            risk_delta=right.risk_score - left.risk_score,
-            cost_delta=round(right.cost_usd - left.cost_usd, 3),
-            latency_delta=right.latency_ms - left.latency_ms,
-            control_delta="safer controls" if right.evals.tool_safety > left.evals.tool_safety else "no improvement",
+        with self.session_factory() as session:
+            left = session.get(RunRecord, left_run_id)
+            right = session.get(RunRecord, right_run_id)
+            if left is None or right is None:
+                raise KeyError(left_run_id if left is None else right_run_id)
+            return CompareView(
+                left_run_id=left_run_id,
+                right_run_id=right_run_id,
+                status_change=f"{left.status} -> {right.status}",
+                risk_delta=right.risk_score - left.risk_score,
+                cost_delta=round(right.cost_usd - left.cost_usd, 3),
+                latency_delta=right.latency_ms - left.latency_ms,
+                control_delta="safer controls" if right.eval_tool_safety > left.eval_tool_safety else "no improvement",
+            )
+
+    def _clone_steps(self, session: Session, from_run_id: str, to_run_id: str) -> None:
+        source_steps = session.scalars(select(StepRecord).where(StepRecord.run_id == from_run_id).order_by(StepRecord.index.asc())).all()
+        for index, step in enumerate(source_steps, start=1):
+            session.add(
+                StepRecord(
+                    id=f"{to_run_id}_step_{index}",
+                    run_id=to_run_id,
+                    index=step.index,
+                    step_type=step.step_type,
+                    title=step.title,
+                    actor=step.actor,
+                    boundary=step.boundary,
+                    verdict=step.verdict,
+                    summary=step.summary,
+                    policy_name=step.policy_name,
+                    policy_reason=step.policy_reason,
+                    failure_class=step.failure_class,
+                )
+            )
+
+    def _next_numeric_id(self, session: Session, model, prefix: str) -> int:
+        ids = session.scalars(select(model.id)).all()
+        numbers = [int(item.split("_")[1]) for item in ids if item.startswith(prefix)]
+        return max(numbers, default=0) + 1
+
+    def _append_audit_event(self, session: Session, run_id: str, actor: str, action: str, summary: str) -> None:
+        session.add(
+            AuditEventRecord(
+                id=f"audit_{self._next_numeric_id(session, AuditEventRecord, 'audit_')}",
+                run_id=run_id,
+                actor=actor,
+                action=action,
+                summary=summary,
+                created_at=utc_now(),
+            )
         )
+
+    def _to_scenario(self, row: ScenarioRecord) -> Scenario:
+        return Scenario.model_validate({column.name: getattr(row, column.name) for column in ScenarioRecord.__table__.columns})
+
+    def _to_run(self, row: RunRecord) -> Run:
+        return Run(
+            id=row.id,
+            tenant=row.tenant,
+            agent_name=row.agent_name,
+            objective=row.objective,
+            scenario=row.scenario,
+            model=row.model,
+            policy_bundle=row.policy_bundle,
+            risk_score=row.risk_score,
+            status=row.status,
+            cost_usd=row.cost_usd,
+            latency_ms=row.latency_ms,
+            trust_boundaries=deepcopy(row.trust_boundaries),
+            pending_reviewer=row.pending_reviewer,
+            incident_id=row.incident_id,
+            latest_replay_id=row.latest_replay_id,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+            evals=EvalScorecard(
+                quality=row.eval_quality,
+                groundedness=row.eval_groundedness,
+                tool_safety=row.eval_tool_safety,
+                latency=row.eval_latency,
+                cost_efficiency=row.eval_cost_efficiency,
+            ),
+        )
+
+    def _to_step(self, row: StepRecord) -> Step:
+        return Step.model_validate({column.name: getattr(row, column.name) for column in StepRecord.__table__.columns})
+
+    def _to_incident(self, row: IncidentRecord) -> Incident:
+        return Incident.model_validate({column.name: getattr(row, column.name) for column in IncidentRecord.__table__.columns})
+
+    def _to_replay(self, row: ReplayRecord) -> Replay:
+        return Replay.model_validate({column.name: getattr(row, column.name) for column in ReplayRecord.__table__.columns})
+
+    def _to_activity(self, row: ActivityEventRecord) -> ActivityEvent:
+        return ActivityEvent.model_validate({column.name: getattr(row, column.name) for column in ActivityEventRecord.__table__.columns})
+
+    def _to_job(self, row: ReplayJobRecord) -> ReplayJob:
+        return ReplayJob.model_validate({column.name: getattr(row, column.name) for column in ReplayJobRecord.__table__.columns})
+
+    def _to_note(self, row: OperatorNoteRecord) -> OperatorNote:
+        return OperatorNote.model_validate({column.name: getattr(row, column.name) for column in OperatorNoteRecord.__table__.columns})
+
+    def _to_audit(self, row: AuditEventRecord) -> AuditEvent:
+        return AuditEvent.model_validate({column.name: getattr(row, column.name) for column in AuditEventRecord.__table__.columns})
