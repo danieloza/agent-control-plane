@@ -2,6 +2,14 @@
 
 > Mission-control product for running, reviewing, and governing AI agents with policy checks, approvals, incidents, replay diffs, and evaluation scorecards.
 
+![Demo walkthrough](C:/Users/syfsy/projekty/agent-control-plane/docs/assets/demo-walkthrough.gif)
+
+## Demo Walkthrough
+
+1. Launch a seeded scenario and inspect the run queue from the cockpit.
+2. Export the run as a report artifact for async review.
+3. Export the incident bundle to show how risky runs move into evidence-driven follow-up.
+
 ## Product Thesis
 
 Most agent demos stop at "the model called a tool."
@@ -16,6 +24,18 @@ Real teams need more:
 - which runs are risky, expensive, slow, or degraded
 
 Agent Control Plane models that missing operational layer.
+
+## Why This Matters In Production
+
+Production AI systems need more than a successful model call.
+
+- operators need to know what happened and why
+- risky write actions need approval paths and auditability
+- incidents need evidence, ownership, and mitigation state
+- replay needs to be safer than the original run, not just repeat it
+- engineering teams need persistence, auth, metrics, and a worker boundary to debug failures under load
+
+This repository is designed to show that operational layer, not just another agent UI.
 
 ## What It Shows
 
@@ -52,6 +72,31 @@ This repository now includes a first production-oriented slice:
 - Postgres-backed docker profile for a more realistic local stack
 - demo JWT auth, tenant-aware RBAC, and basic rate limiting on mutating API calls
 - Prometheus-style metrics surface and admin registry views
+
+## Architecture Diagram
+
+```mermaid
+flowchart LR
+    O["Operator / Reviewer"] --> UI["Cockpit UI"]
+    UI --> API["FastAPI API"]
+    API --> SVC["Services Layer"]
+    SVC --> REPO["SQLAlchemy Repository"]
+    REPO --> DB["Postgres / SQLite"]
+    API --> AUTH["Auth / RBAC"]
+    API --> MET["Metrics / Health"]
+    SVC --> JOB["Replay Job Queue"]
+    JOB --> WORKER["Replay Worker"]
+    WORKER --> REPO
+    SVC --> EXP["Markdown Exports"]
+```
+
+## Architecture Decisions
+
+- `FastAPI + custom UI` keeps the system API-first while still providing an operator-facing surface for demos and review flows.
+- `Repository/service split` keeps persistence and runtime logic separate enough to evolve toward a larger platform without turning handlers into business logic blobs.
+- `Replay worker` keeps heavier replay operations outside the request/response lifecycle and makes the reliability story more believable than inline replay.
+- `Tenant-aware RBAC` lets the same control surface model operator boundaries instead of pretending all reviewers are equivalent.
+- `Markdown exports` make run and incident reviews portable for async review, handoff, and documentation workflows.
 
 ## Quickstart
 
@@ -133,9 +178,12 @@ Demo users:
 
 ## Proof Assets
 
-- cockpit: [docs/assets/cockpit-home.png](/C:/Users/syfsy/projekty/agent-control-plane/docs/assets/cockpit-home.png)
+- cockpit overview: [docs/assets/cockpit-home.png](/C:/Users/syfsy/projekty/agent-control-plane/docs/assets/cockpit-home.png)
+  shows the operator-first layout with run queue, recommendation layer, and action console
 - run report export: [docs/assets/run-report.png](/C:/Users/syfsy/projekty/agent-control-plane/docs/assets/run-report.png)
+  shows how a single run can be exported into a review artifact outside the live UI
 - incident bundle export: [docs/assets/incident-bundle.png](/C:/Users/syfsy/projekty/agent-control-plane/docs/assets/incident-bundle.png)
+  shows how blocked or risky runs can be packaged for incident handling and audit follow-up
 
 ## Interview Framing
 
@@ -148,6 +196,7 @@ It is an operator-facing platform for AI agents: a system that makes multi-step 
 - Architecture: [docs/ARCHITECTURE.md](/C:/Users/syfsy/projekty/agent-control-plane/docs/ARCHITECTURE.md)
 - Case study: [docs/CASE_STUDY.md](/C:/Users/syfsy/projekty/agent-control-plane/docs/CASE_STUDY.md)
 - Runbook: [docs/RUNBOOK.md](/C:/Users/syfsy/projekty/agent-control-plane/docs/RUNBOOK.md)
+- Reliability / threat notes: [docs/RELIABILITY_NOTES.md](/C:/Users/syfsy/projekty/agent-control-plane/docs/RELIABILITY_NOTES.md)
 
 ## Migrations
 
