@@ -9,3 +9,5 @@ agent_control_plane.db
 .playwright-cli/
 .runtime/
 agent_control_plane_local.db
+output/
+docs/LINKEDIN_POST*.md
