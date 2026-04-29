@@ -2,7 +2,7 @@
 
 > Mission-control product for running, reviewing, and governing AI agents with policy checks, approvals, incidents, replay diffs, and evaluation scorecards.
 
-![Demo walkthrough](C:/Users/syfsy/projekty/agent-control-plane/docs/assets/demo-walkthrough.gif)
+![Demo walkthrough](docs/assets/demo-walkthrough.gif)
 
 ## Demo Walkthrough
 
@@ -178,11 +178,11 @@ Demo users:
 
 ## Proof Assets
 
-- cockpit overview: [docs/assets/cockpit-home.png](/C:/Users/syfsy/projekty/agent-control-plane/docs/assets/cockpit-home.png)
+- cockpit overview: [docs/assets/cockpit-home.png](docs/assets/cockpit-home.png)
   shows the operator-first layout with run queue, recommendation layer, and action console
-- run report export: [docs/assets/run-report.png](/C:/Users/syfsy/projekty/agent-control-plane/docs/assets/run-report.png)
+- run report export: [docs/assets/run-report.png](docs/assets/run-report.png)
   shows how a single run can be exported into a review artifact outside the live UI
-- incident bundle export: [docs/assets/incident-bundle.png](/C:/Users/syfsy/projekty/agent-control-plane/docs/assets/incident-bundle.png)
+- incident bundle export: [docs/assets/incident-bundle.png](docs/assets/incident-bundle.png)
   shows how blocked or risky runs can be packaged for incident handling and audit follow-up
 
 ## Interview Framing
@@ -193,10 +193,10 @@ It is an operator-facing platform for AI agents: a system that makes multi-step 
 
 ## Docs
 
-- Architecture: [docs/ARCHITECTURE.md](/C:/Users/syfsy/projekty/agent-control-plane/docs/ARCHITECTURE.md)
-- Case study: [docs/CASE_STUDY.md](/C:/Users/syfsy/projekty/agent-control-plane/docs/CASE_STUDY.md)
-- Runbook: [docs/RUNBOOK.md](/C:/Users/syfsy/projekty/agent-control-plane/docs/RUNBOOK.md)
-- Reliability / threat notes: [docs/RELIABILITY_NOTES.md](/C:/Users/syfsy/projekty/agent-control-plane/docs/RELIABILITY_NOTES.md)
+- Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Case study: [docs/CASE_STUDY.md](docs/CASE_STUDY.md)
+- Runbook: [docs/RUNBOOK.md](docs/RUNBOOK.md)
+- Reliability / threat notes: [docs/RELIABILITY_NOTES.md](docs/RELIABILITY_NOTES.md)
 
 ## Migrations
 
