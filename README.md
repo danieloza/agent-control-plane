@@ -185,12 +185,6 @@ Demo users:
 - incident bundle export: [docs/assets/incident-bundle.png](docs/assets/incident-bundle.png)
   shows how blocked or risky runs can be packaged for incident handling and audit follow-up
 
-## Interview Framing
-
-This is not another chatbot demo.
-
-It is an operator-facing platform for AI agents: a system that makes multi-step agent behavior reviewable, governable, replayable, and exportable in a production-style workflow with persistence, auth context, and safer replay handling.
-
 ## Docs
 
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
